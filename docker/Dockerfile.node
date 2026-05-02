@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Application source
+COPY src/ ./src/
+
+# Health check endpoint
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:${NODE_PORT:-8000}/health || exit 1
+
+# Default entrypoint – override CMD to select node type
+ENTRYPOINT ["python", "-m"]
+CMD ["src.nodes.lock_manager"]
+
+EXPOSE ${NODE_PORT:-8000}

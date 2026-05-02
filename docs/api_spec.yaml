@@ -1,0 +1,374 @@
+openapi: 3.0.3
+info:
+  title: Distributed Synchronization System API
+  version: 1.0.0
+  description: |
+    API untuk Distributed Lock Manager, Queue System, dan Cache Coherence System.
+    Semua endpoint mengembalikan JSON. Node mungkin merespons dengan 307 jika bukan leader.
+
+servers:
+  - url: http://localhost:8100
+    description: Lock Manager Node 1
+  - url: http://localhost:8200
+    description: Queue Node 1
+  - url: http://localhost:8300
+    description: Cache Node 1
+
+tags:
+  - name: system
+    description: Health dan metrics
+  - name: lock
+    description: Distributed Lock Manager
+  - name: queue
+    description: Distributed Queue
+  - name: cache
+    description: Distributed Cache (MESI)
+
+paths:
+  # ============================================================
+  # System
+  # ============================================================
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      responses:
+        "200":
+          description: Node sehat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node_id: { type: string }
+                  status: { type: string, example: ok }
+                  uptime: { type: number, description: Detik }
+
+  /metrics:
+    get:
+      tags: [system]
+      summary: Prometheus-compatible metrics
+      responses:
+        "200":
+          description: Metrics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+
+  # ============================================================
+  # Lock Manager
+  # ============================================================
+  /lock/acquire:
+    post:
+      tags: [lock]
+      summary: Acquire distributed lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LockAcquireRequest"
+      responses:
+        "200":
+          description: Status akuisisi lock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockAcquireResponse"
+        "307":
+          description: Bukan leader, redirect ke leader
+
+  /lock/release:
+    post:
+      tags: [lock]
+      summary: Release distributed lock
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource, client_id]
+              properties:
+                resource: { type: string }
+                client_id: { type: string }
+      responses:
+        "200":
+          description: Lock berhasil direlease
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: released }
+
+  /lock/heartbeat:
+    post:
+      tags: [lock]
+      summary: Refresh lock lease
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource, client_id]
+              properties:
+                resource: { type: string }
+                client_id: { type: string }
+      responses:
+        "200":
+          description: Heartbeat diterima
+
+  /lock/status/{resource}:
+    get:
+      tags: [lock]
+      summary: Status lock pada resource
+      parameters:
+        - name: resource
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Status lock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockStatusResponse"
+
+  /lock/deadlocks:
+    get:
+      tags: [lock]
+      summary: Daftar deadlock yang terdeteksi
+      responses:
+        "200":
+          description: Siklus deadlock
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deadlocks:
+                    type: array
+                    items:
+                      type: array
+                      items: { type: string }
+
+  # ============================================================
+  # Queue
+  # ============================================================
+  /queue/enqueue:
+    post:
+      tags: [queue]
+      summary: Kirim pesan ke distributed queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnqueueRequest"
+      responses:
+        "200":
+          description: Pesan berhasil dikirim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnqueueResponse"
+
+  /queue/dequeue:
+    post:
+      tags: [queue]
+      summary: Ambil pesan dari distributed queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [queue]
+              properties:
+                queue: { type: string }
+                consumer_id: { type: string }
+      responses:
+        "200":
+          description: Pesan (null jika queue kosong)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DequeueResponse"
+
+  /queue/ack:
+    post:
+      tags: [queue]
+      summary: Acknowledge pesan yang sudah diproses
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [msg_id]
+              properties:
+                msg_id: { type: string }
+      responses:
+        "200":
+          description: ACK diterima
+
+  /queue/stats/{queue}:
+    get:
+      tags: [queue]
+      summary: Statistik queue
+      parameters:
+        - name: queue
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Stats queue
+
+  # ============================================================
+  # Cache
+  # ============================================================
+  /cache/{key}:
+    get:
+      tags: [cache]
+      summary: Baca nilai dari cache
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Cache hit/miss
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheGetResponse"
+
+    put:
+      tags: [cache]
+      summary: Tulis nilai ke cache (dengan MESI invalidation)
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {}
+      responses:
+        "200":
+          description: Nilai tersimpan
+
+    delete:
+      tags: [cache]
+      summary: Hapus key dari cache dan broadcast invalidation
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Key dihapus
+
+  /cache/stats:
+    get:
+      tags: [cache]
+      summary: Statistik cache
+      responses:
+        "200":
+          description: Metrics dan stats
+
+# ============================================================
+# Schemas
+# ============================================================
+components:
+  schemas:
+    LockAcquireRequest:
+      type: object
+      required: [resource, client_id]
+      properties:
+        resource:
+          type: string
+          example: "database-table-users"
+        client_id:
+          type: string
+          example: "service-a-worker-1"
+        lock_type:
+          type: string
+          enum: [shared, exclusive]
+          default: exclusive
+
+    LockAcquireResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [acquired, waiting, timeout, not_leader]
+
+    LockStatusResponse:
+      type: object
+      properties:
+        resource: { type: string }
+        exclusive_holder: { type: string, nullable: true }
+        shared_holders:
+          type: array
+          items: { type: string }
+        queue_length: { type: integer }
+
+    EnqueueRequest:
+      type: object
+      required: [queue, payload]
+      properties:
+        queue: { type: string, example: "orders" }
+        payload: { type: object }
+        producer_id: { type: string }
+
+    EnqueueResponse:
+      type: object
+      properties:
+        msg_id: { type: string }
+        stored_on: { type: integer, description: Jumlah replica yang menyimpan pesan }
+
+    DequeueResponse:
+      type: object
+      properties:
+        msg:
+          nullable: true
+          type: object
+          properties:
+            queue_name: { type: string }
+            payload: { type: object }
+            msg_id: { type: string }
+            delivery_count: { type: integer }
+
+    CacheGetResponse:
+      type: object
+      properties:
+        hit: { type: boolean }
+        key: { type: string }
+        value: { nullable: true }
+        state:
+          type: string
+          enum: [M, E, S, I]
+        version: { type: integer }
+
+    MetricsResponse:
+      type: object
+      properties:
+        node_id: { type: string }
+        uptime_seconds: { type: number }
+        counters: { type: object }
+        gauges: { type: object }
+        histograms: { type: object }

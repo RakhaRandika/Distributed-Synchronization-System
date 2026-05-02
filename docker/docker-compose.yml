@@ -1,0 +1,165 @@
+version: "3.9"
+
+
+x-node-defaults: &node-defaults
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.node
+  restart: unless-stopped
+  networks:
+    - dsnet
+  env_file:
+    - ../.env.example
+
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dss-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - dsnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  lock-node-1:
+    <<: *node-defaults
+    container_name: lock-node-1
+    command: ["src.nodes.lock_manager"]
+    environment:
+      NODE_ID: lock-node-1
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8100
+      CLUSTER_NODES: lock-node-1:8100,lock-node-2:8101,lock-node-3:8102
+      REDIS_HOST: redis
+    ports:
+      - "8100:8100"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  lock-node-2:
+    <<: *node-defaults
+    container_name: lock-node-2
+    command: ["src.nodes.lock_manager"]
+    environment:
+      NODE_ID: lock-node-2
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8101
+      CLUSTER_NODES: lock-node-1:8100,lock-node-2:8101,lock-node-3:8102
+      REDIS_HOST: redis
+    ports:
+      - "8101:8101"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  lock-node-3:
+    <<: *node-defaults
+    container_name: lock-node-3
+    command: ["src.nodes.lock_manager"]
+    environment:
+      NODE_ID: lock-node-3
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8102
+      CLUSTER_NODES: lock-node-1:8100,lock-node-2:8101,lock-node-3:8102
+      REDIS_HOST: redis
+    ports:
+      - "8102:8102"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+
+  queue-node-1:
+    <<: *node-defaults
+    container_name: queue-node-1
+    command: ["src.nodes.queue_node"]
+    environment:
+      NODE_ID: queue-node-1
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8200
+      CLUSTER_NODES: queue-node-1:8200,queue-node-2:8201,queue-node-3:8202
+      REDIS_HOST: redis
+    ports:
+      - "8200:8200"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  queue-node-2:
+    <<: *node-defaults
+    container_name: queue-node-2
+    command: ["src.nodes.queue_node"]
+    environment:
+      NODE_ID: queue-node-2
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8201
+      CLUSTER_NODES: queue-node-1:8200,queue-node-2:8201,queue-node-3:8202
+      REDIS_HOST: redis
+    ports:
+      - "8201:8201"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  queue-node-3:
+    <<: *node-defaults
+    container_name: queue-node-3
+    command: ["src.nodes.queue_node"]
+    environment:
+      NODE_ID: queue-node-3
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8202
+      CLUSTER_NODES: queue-node-1:8200,queue-node-2:8201,queue-node-3:8202
+      REDIS_HOST: redis
+    ports:
+      - "8202:8202"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+
+  cache-node-1:
+    <<: *node-defaults
+    container_name: cache-node-1
+    command: ["src.nodes.cache_node"]
+    environment:
+      NODE_ID: cache-node-1
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8300
+      CLUSTER_NODES: cache-node-1:8300,cache-node-2:8301,cache-node-3:8302
+    ports:
+      - "8300:8300"
+
+  cache-node-2:
+    <<: *node-defaults
+    container_name: cache-node-2
+    command: ["src.nodes.cache_node"]
+    environment:
+      NODE_ID: cache-node-2
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8301
+      CLUSTER_NODES: cache-node-1:8300,cache-node-2:8301,cache-node-3:8302
+    ports:
+      - "8301:8301"
+
+  cache-node-3:
+    <<: *node-defaults
+    container_name: cache-node-3
+    command: ["src.nodes.cache_node"]
+    environment:
+      NODE_ID: cache-node-3
+      NODE_HOST: 0.0.0.0
+      NODE_PORT: 8302
+      CLUSTER_NODES: cache-node-1:8300,cache-node-2:8301,cache-node-3:8302
+    ports:
+      - "8302:8302"
+
+networks:
+  dsnet:
+    driver: bridge
