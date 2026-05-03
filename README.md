@@ -3,7 +3,7 @@
 **Judul:** Implementasi Distributed Synchronization System (Lock, Queue, Cache Coherence)  
 **Nama:** Muhammad Rakha Randika  
 **NIM:** 11231060  
-**Link Video Demo:** [Masukkan_Link_Video_Youtube_Disini]
+
 
 ---
 
@@ -125,3 +125,5 @@ Pembangunan sistem berbasis aiohttp ini berhasil membuktikan keandalan teori fun
 3. Keseimbangan _memory map_ terpadukan apik via mitigasi usang **MESI Protocol**.
 
 Tantangan tersulit pada rancangan arsitektur ini menyangkut penanggulangan asinkronisasi paralel (Async I/O) saat perburuan _leader_ baru di algoritma Raft dan melacak koneksi buntu antar internal container pada saat menguji pembaharuan metrik LRU. Pemanfaatan Redis sebagai tumpuan _State Storage_ menangani isu memori relasional secara paripurna.
+
+**Link Video Demo:** https://youtu.be/V_zufuMm6PU
